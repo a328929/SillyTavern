@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-02-26T05:22:24.958555Z",
+  "html_issue_count": 1147,
+  "css_issue_count": 23,
+  "severity_counts_html": {
+    "High": 545,
+    "Medium": 601,
+    "Low": 1
+  },
+  "type_counts_html_top10": [
+    [
+      "Form control missing programmatic label",
+      667
+    ],
+    [
+      "Non-semantic element used as button (.menu_button on div/span)",
+      328
+    ],
+    [
+      "Icon button lacks accessible name (div.menu_button_icon)",
+      161
+    ],
+    [
+      "Drag handle without accessible description",
+      9
+    ],
+    [
+      "Link used as button (href=\"#\" / onclick return false)",
+      9
+    ],
+    [
+      "Image missing alt",
+      7
+    ],
+    [
+      "Missing document language",
+      6
+    ],
+    [
+      "Disables browser zoom (user-scalable=no / maximum-scale=1)",
+      2
+    ],
+    [
+      "Possibly non-decorative image has empty alt",
+      1
+    ]
+  ]
+}
