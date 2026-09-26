@@ -80,8 +80,6 @@ export class AutoComplete {
     }
 
 
-
-
     /**
      * @param {HTMLTextAreaElement|HTMLInputElement} textarea The textarea to receive autocomplete.
      * @param {() => boolean} checkIfActivate Function should return true only if under the current conditions, autocomplete should display (e.g., for slash commands: autoComplete.text[0] == '/')
@@ -128,9 +126,17 @@ export class AutoComplete {
         });
         textarea.addEventListener('blur', () => this.hide());
         if (isFloating) {
-            textarea.addEventListener('scroll', () => this.updateFloatingPositionDebounced());
+            textarea.addEventListener('scroll', () => {
+                if (this.isActive) {
+                    this.updateFloatingPositionDebounced();
+                }
+            });
         }
-        window.addEventListener('resize', () => this.updatePositionDebounced());
+        window.addEventListener('resize', () => {
+            if (this.isActive) {
+                this.updatePositionDebounced();
+            }
+        });
     }
 
     /**
@@ -414,7 +420,6 @@ export class AutoComplete {
             });
 
 
-
         if (this.isForceHidden) {
             // hidden with escape
             return this.hide();
@@ -465,7 +470,6 @@ export class AutoComplete {
     }
 
 
-
     /**
      * Create updated DOM.
      */
@@ -512,7 +516,6 @@ export class AutoComplete {
     getLayer() {
         return this.textarea.closest('dialog, body');
     }
-
 
 
     /**
@@ -671,7 +674,9 @@ export class AutoComplete {
                     this.clone.remove();
                 }
             });
-            mo.observe(this.textarea.parentElement, { childList: true });
+            if (this.textarea.parentElement) {
+                mo.observe(this.textarea.parentElement, { childList: true });
+            }
         }
         this.clone.style.height = `${inputRect.height}px`;
         this.clone.style.left = `${inputRect.left}px`;

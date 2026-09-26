@@ -157,8 +157,7 @@ export async function getVersion() {
             const remoteLatest = await git.revparse([trackingBranch]);
             isLatest = localLatest === remoteLatest;
         }
-    }
-    catch {
+    } catch {
         // suppress exception
     }
 
@@ -487,6 +486,20 @@ export async function readAllChunks(readableStream) {
     });
 }
 
+/**
+ * Creates a precisely-sized ArrayBuffer from a Uint8Array view such as a Node Buffer.
+ * This avoids leaking unrelated bytes from the underlying backing store.
+ * @param {Uint8Array} view Source byte view
+ * @returns {ArrayBuffer} Exact ArrayBuffer slice for the provided view
+ */
+export function getArrayBufferSlice(view) {
+    if (!(view instanceof Uint8Array)) {
+        throw new TypeError('Expected Uint8Array');
+    }
+
+    return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+}
+
 function isObject(item) {
     return (item && typeof item === 'object' && !Array.isArray(item));
 }
@@ -667,18 +680,7 @@ export function removeOldBackups(directory, prefix, limit = null) {
  * @returns {string[]} List of image file names
  */
 export function getImages(directoryPath, sortBy = 'name', type = MEDIA_REQUEST_TYPE.IMAGE) {
-    function getSortFunction() {
-        switch (sortBy) {
-            case 'name':
-                return Intl.Collator().compare;
-            case 'date':
-                return (a, b) => fs.statSync(path.join(directoryPath, a)).mtimeMs - fs.statSync(path.join(directoryPath, b)).mtimeMs;
-            default:
-                return (_a, _b) => 0;
-        }
-    }
-
-    return fs
+    const files = fs
         .readdirSync(directoryPath, { withFileTypes: true })
         .filter(dirent => dirent.isFile())
         .map(dirent => dirent.name)
@@ -697,22 +699,39 @@ export function getImages(directoryPath, sortBy = 'name', type = MEDIA_REQUEST_T
                 return true;
             }
             return false;
-        })
-        .sort(getSortFunction());
+        });
+
+    switch (sortBy) {
+        case 'name':
+            return files.sort(Intl.Collator().compare);
+        case 'date': {
+            const mtimes = new Map();
+            for (const file of files) {
+                try {
+                    mtimes.set(file, fs.statSync(path.join(directoryPath, file)).mtimeMs);
+                } catch (err) {
+                    if (err?.code !== 'ENOENT') {
+                        throw err;
+                    }
+                    mtimes.set(file, 0);
+                }
+            }
+            return files.sort((a, b) => mtimes.get(a) - mtimes.get(b));
+        }
+        default:
+            return files;
+    }
 }
 
 /**
  * Pipe a fetch() response to an Express.js Response, including status code.
  * @param {import('node-fetch').Response} from The Fetch API response to pipe from.
  * @param {import('express').Response} to The Express response to pipe to.
+ * @returns {Promise<void>}
  */
-export function forwardFetchResponse(from, to) {
+export async function forwardFetchResponse(from, to) {
     let statusCode = from.status;
     let statusText = from.statusText;
-
-    if (!from.ok) {
-        console.warn(`Streaming request failed with status ${statusCode} ${statusText}`);
-    }
 
     // Avoid sending 401 responses as they reset the client Basic auth.
     // This can produce an interesting artifact as "400 Unauthorized", but it's not out of spec.
@@ -725,6 +744,21 @@ export function forwardFetchResponse(from, to) {
 
     to.statusCode = statusCode;
     to.statusMessage = statusText;
+
+    if (!from.ok) {
+        try {
+            const rawErrorText = await from.text();
+            const detail = rawErrorText || 'Unknown error occurred';
+
+            console.warn(`Streaming request failed with status ${from.status} ${statusText}: ${detail}`);
+            to.end(rawErrorText, 'utf-8');
+        } catch {
+            console.warn(`Streaming request failed with status ${from.status} ${statusText}: Unknown error occurred`);
+            to.end();
+        }
+
+        return;
+    }
 
     if (from.body && to.socket) {
         from.body.pipe(to);
@@ -821,8 +855,7 @@ export function mergeObjectWithYaml(obj, yamlString) {
                     Object.assign(obj, item);
                 }
             }
-        }
-        else if (parsedObject && typeof parsedObject === 'object') {
+        } else if (parsedObject && typeof parsedObject === 'object') {
             Object.assign(obj, parsedObject);
         }
     } catch {
@@ -1012,7 +1045,6 @@ export async function canResolve(name, useIPv6 = true, useIPv4 = true) {
         }
 
         return v6Resolved || v4Resolved;
-
     } catch (error) {
         return false;
     }
@@ -1308,8 +1340,7 @@ export function safeReadFileSync(filePath, options = { encoding: 'utf-8' }) {
 export function setWindowTitle(title) {
     if (process.platform === 'win32') {
         process.title = title;
-    }
-    else {
+    } else {
         process.stdout.write(`\x1b]2;${title}\x1b\x5c`);
     }
 }
@@ -1379,7 +1410,7 @@ export function isPathUnderParent(parentPath, childPath) {
 
     const relativePath = path.relative(normalizedParent, normalizedChild);
 
-    return !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+    return relativePath !== '..' && !relativePath.startsWith('..' + path.sep) && !path.isAbsolute(relativePath);
 }
 
 /**
